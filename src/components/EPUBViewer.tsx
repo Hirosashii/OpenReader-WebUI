@@ -45,7 +45,7 @@ export function EPUBViewer({ className = '' }: EPUBViewerProps) {
   // Dynamically mirror styling from the EPUB iframe
   // ---------------------------------------------------------
   const syncOverlay = useCallback(() => {
-    const iframe: HTMLIFrameElement | null =
+    const iframe: HTMLIFrameElement | null | undefined =
       containerRef.current?.querySelector("iframe");
 
     if (!iframe) return;
