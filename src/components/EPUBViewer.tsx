@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useCallback } from 'react';
+import { useEffect, useRef, useCallback, useState } from 'react';
 import dynamic from 'next/dynamic';
 import { useEPUB } from '@/contexts/EPUBContext';
 import { useTTS } from '@/contexts/TTSContext';
@@ -22,7 +22,7 @@ export function EPUBViewer({ className = '' }: EPUBViewerProps) {
   const { 
     currDocData, 
     currDocName, 
-    currDocText,     // added for Fork1
+    currDocText,      // ⬅ added
     locationRef, 
     handleLocationChanged, 
     bookRef, 
@@ -31,36 +31,96 @@ export function EPUBViewer({ className = '' }: EPUBViewerProps) {
     setRendition,
     extractPageText 
   } = useEPUB();
+
   const { registerLocationChangeHandler, pause } = useTTS();
   const { epubTheme } = useConfig();
   const { updateTheme } = useEPUBTheme(epubTheme, renditionRef.current);
+
   const containerRef = useRef<HTMLDivElement>(null);
+  const overlayRef = useRef<HTMLDivElement>(null);
+  const [overlayStyle, setOverlayStyle] = useState({});
   const { isResizing, setIsResizing, dimensions } = useEPUBResize(containerRef);
 
+  // ---------------------------------------------------------
+  // Dynamically mirror styling from the EPUB iframe
+  // ---------------------------------------------------------
+  const syncOverlay = useCallback(() => {
+    const iframe: HTMLIFrameElement | null =
+      containerRef.current?.querySelector("iframe");
+
+    if (!iframe) return;
+    const doc = iframe.contentDocument;
+    if (!doc) return;
+
+    const body = doc.body;
+    const cs = window.getComputedStyle(body);
+
+    setOverlayStyle({
+      position: "absolute",
+      left: 0,
+      top: 0,
+      width: "100%",
+      height: "100%",
+      overflow: "hidden",
+
+      // MUST remain hoverable for Migaku
+      pointerEvents: "auto",
+
+      // Invisible but real text
+      color: "transparent",
+
+      // Real EPUB layout
+      fontSize: cs.fontSize,
+      lineHeight: cs.lineHeight,
+      columnCount: cs.columnCount,
+      columnGap: cs.columnGap,
+      columnWidth: cs.columnWidth,
+      padding: cs.padding,
+      whiteSpace: "pre-wrap",
+
+      zIndex: 9999
+    });
+  }, [containerRef]);
+
+  // ---------------------------------------------------------
+  // Resize → re-extract text after layout
+  // ---------------------------------------------------------
   const checkResize = useCallback(() => {
     if (isResizing && dimensions && bookRef.current?.isOpen && renditionRef.current) {
       pause();
-      // Only extract text when we have dimensions, ensuring the resize is complete
       extractPageText(bookRef.current, renditionRef.current, true);
       setIsResizing(false);
-      
       return true;
     } else {
       return false;
     }
   }, [isResizing, setIsResizing, dimensions, pause, bookRef, renditionRef, extractPageText]);
 
-  // Check for isResizing to pause TTS and re-extract text
+  // ---------------------------------------------------------
+  // Effects
+  // ---------------------------------------------------------
+
+  // Run syncOverlay after text/theme/size changes
+  useEffect(() => {
+    const id = setTimeout(syncOverlay, 120); // Small delay allows epub.js to finish layout
+    return () => clearTimeout(id);
+  }, [currDocText, epubTheme, dimensions, syncOverlay]);
+
+  // Monitor resizing
   useEffect(() => {
     if (checkResize()) return;
   }, [checkResize]);
 
-  // Register the location change handler
+  // Register location-changed callback
   useEffect(() => {
     registerLocationChangeHandler(handleLocationChanged);
   }, [registerLocationChangeHandler, handleLocationChanged]);
 
-    if (!currDocData) {
+  // ---------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------
+
+  if (!currDocData) {
     return <DocumentSkeleton />;
   }
 
@@ -80,22 +140,17 @@ export function EPUBViewer({ className = '' }: EPUBViewerProps) {
           getRendition={(_rendition) => {
             setRendition(_rendition);
             updateTheme();
+            setTimeout(syncOverlay, 100);  // also sync after initial load
           }}
         />
       </div>
 
-      {/* Plain-text mirror of the current EPUB page for tools like Migaku */}
+      {/* MIGAKU OVERLAY — invisible text matching EPUB columns */}
       {currDocText && (
         <div
-          id="migaku-epub-plain-text"
-          aria-hidden="true"
-          style={{
-            position: 'absolute',
-            left: '-99999px',
-            top: '0',
-            whiteSpace: 'pre-wrap',
-            pointerEvents: 'none',
-          }}
+          id="migaku-overlay"
+          ref={overlayRef}
+          style={overlayStyle}
         >
           {currDocText}
         </div>
