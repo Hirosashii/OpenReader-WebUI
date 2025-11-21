@@ -78,28 +78,6 @@ export function EPUBViewer({ className = '' }: EPUBViewerProps) {
           showToc={true}
           readerStyles={epubTheme && getThemeStyles() || undefined}
           getRendition={(_rendition) => {
-            // ---- FORCE NO-IFRAME EPUB RENDERING ----
-            try {
-              // Disable iframe-based manager
-              if (_rendition.book?.settings) {
-                _rendition.book.settings.manager = "continuous";
-                _rendition.book.settings.flow = "scrolled-doc";
-                _rendition.book.settings.layout = "reflowable";
-              }
-          
-              if (_rendition.settings) {
-                _rendition.settings.manager = "continuous";
-                _rendition.settings.flow = "scrolled-doc";
-                _rendition.settings.layout = "reflowable";
-              }
-          
-              // Nullify iframe creation
-              _rendition.iframes = [];
-              _rendition.render = _rendition.inject;
-            } catch (e) {
-              console.error("Failed to override iframe mode:", e);
-            }
-          
             setRendition(_rendition);
             updateTheme();
           }}
