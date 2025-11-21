@@ -8,6 +8,7 @@ import { useConfig } from '@/contexts/ConfigContext';
 import { DocumentSkeleton } from '@/components/DocumentSkeleton';
 import { useEPUBTheme, getThemeStyles } from '@/hooks/epub/useEPUBTheme';
 import { useEPUBResize } from '@/hooks/epub/useEPUBResize';
+import "@/lib/noIframeEPUB";
 
 const ReactReader = dynamic(() => import('react-reader').then(mod => mod.ReactReader), {
   ssr: false,
