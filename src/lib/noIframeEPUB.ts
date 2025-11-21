@@ -1,24 +1,43 @@
-// Forces epub.js to render inline (no iframe)
+// Patch epub.js to disable iframe-based rendering and force inline DOM rendering.
 import ePub from "epubjs";
 
-// Patch rendition to disable iframe usage
+// Define minimal shape for the EPUB Rendition prototype.
+// We avoid using "any" to comply with ESLint rules.
+interface PatchedRendition {
+  renderTo: (element: HTMLElement, options?: Record<string, unknown>) => unknown;
+  manager?: { views: unknown[] };
+  iframes?: unknown[];
+  [key: string]: unknown;
+}
+
 (function patchNoIframe() {
-  const RenditionProto = (ePub as any).Rendition?.prototype;
-  if (!RenditionProto) return;
+  // Extract prototype safely using an explicit cast.
+  const RawRendition = (ePub as unknown as { Rendition?: { prototype?: PatchedRendition } }).Rendition;
 
-  // Replace default renderTo with inline injection of section HTML
-  const originalRenderTo = RenditionProto.renderTo;
+  if (!RawRendition || !RawRendition.prototype) {
+    return;
+  }
 
-  RenditionProto.renderTo = function(element: HTMLElement, options: any = {}) {
-    // Force inline (div-based) rendering
-    options.flow = "scrolled-doc";
+  const proto = RawRendition.prototype as PatchedRendition;
+
+  const originalRenderTo = proto.renderTo.bind(proto);
+
+  proto.renderTo = function (
+    element: HTMLElement,
+    options: Record<string, unknown> = {}
+  ) {
+    // Force inline flow instead of iframe-based pagination
     options.manager = "continuous";
+    options.flow = "scrolled-doc";
 
-    // Disable iframe creation
-    this.manager && (this.manager.views = []);
+    // Remove iframe usage
+    if (this.manager) {
+      this.manager.views = [];
+    }
+
     this.iframes = [];
 
-    // Call the original with modified options
-    return originalRenderTo.call(this, element, options);
+    // Call original epub.js render
+    return originalRenderTo(element, options);
   };
 })();
